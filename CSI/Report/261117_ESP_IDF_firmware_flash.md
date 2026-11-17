@@ -11,9 +11,17 @@ tags: [bao-cao, esp-idf, firmware, flash]
 
 **Người thực hiện:** Kiên · **Ngày thực hiện:** 17/11/2026
 
+**Changelog**
+
+| # | Thời gian | Thay đổi |
+|---|---|---|
+| 1 | 22:43 17/11/26 | Bổ sung cấu trúc sdkconfig/menuconfig và cách đổi cấu hình; ghi kết quả build chip `c5` bằng ESP-IDF 6.1 local (thành công sau 2 bản vá tương thích IDF 6, tổng 8 dòng) |
+
 ## 1. Vấn đề và mục tiêu giải quyết
 
-Repo ESPectre chia làm hai phần: `src/cpp/` (firmware C++ flash lên ESP32) và `src/python/` (client desktop: script, thu thập và xử lý dữ liệu CSI). Hiện dự án CSI đang flash thiết bị bằng web flasher (`https://espectre.dev/tools/flash/`), tức là chỉ dùng được image có sẵn. Mục tiêu của báo cáo này: nắm đường build và flash firmware **Native** (ESP-IDF thuần, không dùng web flasher) để có thể tùy biến cấu hình và tự build image cho đúng chip của mình. Chỉ xét đường **Native** (`src/cpp/frontend/native/`), không xét ESPHome hay Matter.
+Repo ESPectre chia làm hai phần: `src/cpp/` (firmware C++ flash lên ESP32) và `src/python/` (client desktop: script, thu thập và xử lý dữ liệu CSI). Hiện dự án CSI đang flash thiết bị bằng web flasher (`https://espectre.dev/tools/flash/`), tức là chỉ dùng được image có sẵn. 
+
+Mục tiêu của báo cáo này: nắm đường build và flash firmware **Native** (ESP-IDF thuần, không dùng web flasher) để có thể tùy biến cấu hình và tự build image cho đúng chip của mình. Chỉ xét đường **Native** (`src/cpp/frontend/native/`), không xét ESPHome hay Matter.
 
 ## 2. Các yêu cầu cần thiết trước
 
@@ -64,6 +72,37 @@ idf.py -B build-esp32c3 -p /dev/cu.usbmodemXXXX flash
 idf.py -B build-esp32c3 -p /dev/cu.usbmodemXXXX monitor
 ```
 
+### Cách đổi cấu hình: cấu trúc sdkconfig / menuconfig
+
+ESP-IDF tự gom mọi `Kconfig.projbuild` của các component trong app Native (`src/cpp/frontend/native/app/CMakeLists.txt` thêm `EXTRA_COMPONENT_DIRS` là `../espectre` và `runtime/esp_idf/espectre_config`):
+
+- Component `espectre` = `src/cpp/frontend/native/espectre`: `Kconfig.projbuild` của nó `rsource "../../Kconfig.projbuild"` (tức `frontend/Kconfig.projbuild`) → menu **"ESPectre Native Frontend"** (Wi-Fi, MQTT, HA discovery, recovery button, loop priority, dev origins) và menu **"ESPectre Firmware"** (`ESPECTRE_TINYUSB_PRIMARY_CONSOLE`, chỉ S2).
+- Component `espectre_config` = `src/cpp/runtime/esp_idf/espectre_config` → menu **"ESPectre Sensing"** (band, detection profile, window, CSI pps, capture profile, traffic mode, TX rate, filter, task priority).
+- Menu **"ESPectre SDK"** ở `src/cpp/Kconfig.projbuild` chỉ xuất hiện khi build với SDK bundle bên ngoài, không có trong app Native.
+
+Luồng file cấu hình:
+
+```
+sdkconfig.defaults  +  sdkconfig.defaults.<idf_target>  (+ sdkconfig.wifi nếu tạo)
+        │  (CLI truyền -DSDKCONFIG_DEFAULTS="...;..." và -DSDKCONFIG=build-<target>/sdkconfig)
+        ▼  merge lúc configure
+build-<target>/sdkconfig   ← file kết quả, đây là thứ menuconfig sửa
+```
+
+- `idf.py -B build-esp32c5 menuconfig` mở giao diện menu và ghi vào `build-esp32c5/sdkconfig`; build lại (`build`) sẽ giữ nguyên các giá trị đã sửa (incremental). `idf.py -B build-esp32c5 fullclean` (hoặc `--clean-all` của CLI) xóa sạch.
+- Để bền trong repo: thêm/sửa dòng `CONFIG_...=...` trong `sdkconfig.defaults` hoặc `sdkconfig.defaults.esp32c5`, hoặc tạo `sdkconfig.wifi` (đã bị gitignore, dùng cho ảnh lab — CLI tự thêm vào `SDKCONFIG_DEFAULTS`). Muốn đóng băng cả một bộ config: copy `build-esp32c5/sdkconfig` ra ngoài rồi build với `ESPECTRE_IDF_SDKCONFIG=<file>`; hoặc override cả danh sách defaults bằng biến `SDKCONFIG_DEFAULTS`.
+
+Các recipe hay dùng (sau đó build lại bằng `./espectre native build --chip c5`):
+
+| Muốn đổi | Chỗ sửa |
+| --- | --- |
+| CSI pps, detection profile, band, traffic mode, filter | menu "ESPectre Sensing" trong menuconfig, hoặc dòng `CONFIG_ESPECTRE_CSI_TARGET_PPS=...` trong `sdkconfig.defaults.esp32c5` |
+| Wi-Fi SSID/password lúc build | tạo `sdkconfig.wifi` với `CONFIG_ESPECTRE_WIFI_SSID`/`CONFIG_ESPECTRE_WIFI_PASSWORD` (runtime Improv/NVS vẫn ghi đè được) |
+| MQTT, HA discovery, nút BOOT recovery | menu "ESPectre Native Frontend" |
+| Kênh OTA mặc định | `--ota-channel release\|preview\|develop` (biến `NATIVE_OTA_CHANNEL`) → compile definition `ESPECTRE_OTA_*_BUILD` |
+
+Lưu ý khi dùng wrapper với ESP-IDF local: `./espectre` tự prepend `.venv/bin` vào `PATH` khi re-exec, làm `idf.py` của IDF 6.1 báo `No module named 'esp_idf_monitor'`. Cách né: gọi trực tiếp `.venv/bin/python ./espectre native build ...` sau khi `source export.sh` (bỏ qua re-exec, `PATH` giữ nguyên của IDF), hoặc dùng `idf.py` thuần như khối lệnh trên.
+
 Các cấu hình được phép (allowed configuration) của đường Native:
 
 - **Chip / IDF target**: 6 target ở trên; mỗi target có `sdkconfig.defaults.<target>` riêng (CPU freq: 240 MHz cho esp32/s2/s3/c5, 160 MHz cho c3/c6; console: `esp32` dùng UART, `esp32s2` dùng TinyUSB CDC, còn lại dùng USB Serial/JTAG).
@@ -77,16 +116,19 @@ Lưu ý khi chuyển từ web flasher sang bản tự build: image chính thức
 
 ## 4. Kết quả và đánh giá
 
-- Đã đạt được: xác định đầy đủ đường Native (`src/cpp/frontend/native/app`), các lệnh build/flash (qua `./espectre native ...` hoặc `idf.py`/`esptool` thuần), danh sách cấu hình được phép (sdkconfig.defaults theo chip + Kconfig), và kiểm chứng môi trường ESP-IDF 6.1 local hoạt động (`idf.py --version` → `ESP-IDF v6.1`, `esptool 5.5.0`, `IDF_PATH=/home/ltkdt/.espressif/v6.1/esp-idf`).
-- Chưa đạt / hạn chế: chưa chạy build và chưa flash (chờ phê duyệt); chưa kiểm chứng thực tế bản ESP-IDF 6.1 biên dịch được toàn bộ tính năng của app (repo mới pin chính thức 5.5.5 cho Docker, app yêu cầu >= 5.5); chưa có số liệu dung lượng image `espectre-native.bin` cho từng chip.
+- Đã đạt được:
+  - Build thành công firmware Native cho chip **c5** bằng ESP-IDF 6.1 local: `source ~/.espressif/v6.1/esp-idf/export.sh` rồi `.venv/bin/python ./espectre native build --chip c5 --ota-channel develop` → `Project build complete`, exit 0. Image `build-esp32c5/espectre-native.bin` dung lượng **1.576.176 byte (0x180CF0)**, slot app `0x1E0000` còn 20% trống. Phiên bản firmware `3.0.0-1-g899a3fb` (từ `git describe`). CLI tự publish sang `build-flash-esp32c5/flasher_args.json` (0x2000 bootloader, 0x8000 partition table, 0xe000 ota_data, 0x20000 app; flash-mode dio, 4MB, 80m) để flash không cần IDF.
+  - `sdkconfig` kết quả ở `build-esp32c5/sdkconfig` đủ các `CONFIG_ESPECTRE_*`: `CSI_TARGET_PPS=100`, `DETECTION_ALGORITHM_LIGHTWEIGHT`, `WIFI_BAND_AUTO`, `TRAFFIC_GENERATOR_MODE_PING`, `HA_DISCOVERY_ENABLED=y`, `RECOVERY_BUTTON_GPIO=28` (đúng BOOT của C5), MQTT off, Wi-Fi trống (chờ provision runtime).
+  - Cần đúng **2 bản vá tương thích IDF 6.1** (tổng 8 dòng, cả hai là no-op trên bản 5.5.5 mà repo pin cho Docker): (1) thêm `espressif/mqtt` với rule `if: "idf_version >=6.0.0"` vào `src/cpp/frontend/native/espectre/idf_component.yml` (IDF 6 đã chuyển esp-mqtt ra component registry, nếu không thì báo `Failed to resolve component 'mqtt'`); (2) thêm `esp_driver_gpio` vào `REQUIRES` của `src/cpp/frontend/native/app/main/CMakeLists.txt` (IDF 6 tách `driver` thành các `esp_driver_*`, nếu không thì báo `app_main.cpp includes driver/gpio.h ... not in the requirements list`).
+- Chưa đạt / hạn chế: chưa flash lên phần cứng thật (chưa có port) nên chưa kiểm chứng boot/log runtime; chưa mở menuconfig tương tác lần nào (mới đọc cấu trúc); bản personal build không nhận OTA signed nên về sau phải flash USB; các CMake warning còn lại là của chính ESP-IDF 6.1 (private include nội bộ), không phải của app.
 
 ## 5. Việc làm tiếp theo / Action items
 
-- [ ] Phê duyệt để chạy build thật với ESP-IDF 6.1 local (đề xuất chip `c3` hoặc `c5` đang dùng trong dự án CSI).
-- [ ] Chạy `./espectre native build --chip <chip> --ota-channel develop` (hoặc lệnh `idf.py` thuần ở Mục 3) và ghi lại dung lượng/time build.
-- [ ] Flash lên board qua `./espectre native flash --chip <chip> --port <port> [--erase]` và kiểm tra log bằng `./espectre monitor`.
-- [ ] Thử tùy biến một option qua `menuconfig` (ví dụ `ESPECTRE_CSI_TARGET_PPS`, traffic mode) rồi build lại để xác nhận đường tùy biến hoạt động.
-- [ ] Provision Wi-Fi bằng Improv Serial (`./espectre provision --ssid ...`) và xác nhận thiết bị lên Direct HTTP (`./espectre devices --frontend native`).
+- [x] Build firmware Native chip `c5` bằng ESP-IDF 6.1 local (kết quả ở Mục 4).
+- [ ] Flash lên board: `./espectre native flash --chip c5 --port <port> [--erase]`, hoặc esptool thuần (đúng lệnh idf.py in ra): `python -m esptool --chip esp32c5 -b 460800 --before default-reset --after hard-reset write-flash --flash-mode dio --flash-size 4MB --flash-freq 80m 0x2000 build-esp32c5/bootloader/bootloader.bin 0x8000 build-esp32c5/partition_table/partition-table.bin 0xe000 build-esp32c5/ota_data_initial.bin 0x20000 build-esp32c5/espectre-native.bin`.
+- [ ] Kiểm tra log boot bằng `./espectre monitor --port <port>` rồi provision Wi-Fi qua Improv Serial (`./espectre provision --ssid ...`), xác nhận thiết bị lên Direct HTTP (`./espectre devices --frontend native`).
+- [ ] Thử đổi 1 option qua `idf.py -B build-esp32c5 menuconfig` (ví dụ `ESPECTRE_CSI_TARGET_PPS` hoặc traffic mode) rồi build lại incremental để xác nhận đường tùy biến hoạt động end-to-end.
+- [ ] Quyết định giữ hay revert 2 bản vá tương thích IDF 6 trong `src/cpp` (hiện đang là thay đổi duy nhất trên worktree, dễ revert bằng git).
 
 ## 6. Các link, nguồn tài liệu tham khảo
 
