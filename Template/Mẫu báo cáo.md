@@ -13,11 +13,20 @@ tags: [bao-cao]
 ---
 ```
 
+ **Changelog (nếu có)**
+
+ | # | Thời gian | Thay đổi |
+ |---|---|---|
+ | 1 | HH:MM DD/MM/YY | Mô tả thay đổi làm thay đổi kết quả báo cáo |
+
 ---
 
 # {{title}}
 
 **Người thực hiện:** {{author}} · **Ngày thực hiện:** {{date}}
+
+ Changelog #1: HH:MM DD/MM/YY
+ Thay đổi có thực hiện làm thay đổi kết quả báo cáo
 
 ## 1. Vấn đề và mục tiêu giải quyết
 

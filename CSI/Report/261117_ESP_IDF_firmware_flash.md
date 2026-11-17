@@ -4,7 +4,7 @@ author: "Kiên"
 date: 2026-11-17
 project: "CSI"
 status: draft
-tags: [bao-cao, esp-idf, firmware, flash]
+tags: [esp-idf, firmware, flash]
 ---
 
 # ESP_IDF_firmware_flash
@@ -103,7 +103,7 @@ Các recipe hay dùng (sau đó build lại bằng `./espectre native build --ch
 
 Lưu ý khi dùng wrapper với ESP-IDF local: `./espectre` tự prepend `.venv/bin` vào `PATH` khi re-exec, làm `idf.py` của IDF 6.1 báo `No module named 'esp_idf_monitor'`. Cách né: gọi trực tiếp `.venv/bin/python ./espectre native build ...` sau khi `source export.sh` (bỏ qua re-exec, `PATH` giữ nguyên của IDF), hoặc dùng `idf.py` thuần như khối lệnh trên.
 
-Các cấu hình được phép (allowed configuration) của đường Native:
+Các cấu hình được phép (allowed configuration) của Native:
 
 - **Chip / IDF target**: 6 target ở trên; mỗi target có `sdkconfig.defaults.<target>` riêng (CPU freq: 240 MHz cho esp32/s2/s3/c5, 160 MHz cho c3/c6; console: `esp32` dùng UART, `esp32s2` dùng TinyUSB CDC, còn lại dùng USB Serial/JTAG).
 - **`sdkconfig.defaults` chung**: flash 4 MB (`CONFIG_ESPTOOLPY_FLASHSIZE_4MB`), tối ưu size, log v2, FreeRTOS 1000 Hz, bật CSI (`CONFIG_ESP_WIFI_CSI_ENABLED`), bảng phân vùng custom `partitions.csv` (nvs / otadata / nvs_key / hai slot OTA `app0`/`app1` mỗi slot `0x1E0000`), console USB Serial/JTAG, mbedTLS certificate bundle full, MQTT over SSL, HTTPD WebSocket, detector mặc định `LIGHTWEIGHT`, Home Assistant discovery bật sẵn, kênh Wi-Fi `0` (auto).
