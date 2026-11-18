@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "CSI/Report/261117_ESP_IDF_firmware_flash.md",
-                "mode": "source",
+                "file": "AICAM/Report/261118_sdk_build.md",
+                "mode": "preview",
                 "source": true
               },
               "icon": "lucide-file",
-              "title": "261117_ESP_IDF_firmware_flash"
+              "title": "261118_sdk_build"
             }
           }
         ]
@@ -189,5 +189,9 @@
     }
   },
   "active": "4fecf8cb483c056d",
-  "lastOpenFiles": []
+  "lastOpenFiles": [
+    "README.md",
+    "CSI/Report/261117_ESP_IDF_firmware_flash.md",
+    "CSI/Report/261117_calibration_mode_clarification.md"
+  ]
 }
